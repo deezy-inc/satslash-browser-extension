@@ -1,5 +1,5 @@
 import { DEFAULT_INSTANCE, getInstanceUrl } from '../config';
-
+import axios from 'axios';
 const BLACKLISTED_HOSTNAMES = ['localhost'];
 
 
@@ -14,8 +14,8 @@ export class Background {
 
   registerListeners() {
     this.api.webRequest.onBeforeRequest.addListener(
-      this.rewriteGoRequests.bind(this),
-      {urls: ["<all_urls>"]},  // will match app URLs that the extension requested permission to ("go/" etc.)
+      this.rewriteSatRequests.bind(this),
+      {urls: ["<all_urls>"], types: ["main_frame"]},  // will match app URLs that the extension requested permission to ("sat/" etc.)
       ['blocking']
     );
 
@@ -25,11 +25,11 @@ export class Background {
   }
 
   storeInstanceUrl() {
-    const store = (url) => window.localStorage.setItem('trottoInstanceUrl', url);
+    const store = (url) => window.localStorage.setItem('ordInstanceUrl', url);
 
     try {
-      this.api.storage.managed.get(['TrottoInstanceUrl']).then((result) => {
-        store(result.TrottoInstanceUrl || DEFAULT_INSTANCE);
+      this.api.storage.managed.get(['OrdInstanceUrl']).then((result) => {
+        store(result.ordInstanceUrl || DEFAULT_INSTANCE);
       });
     } catch(e) {
       store(DEFAULT_INSTANCE);
@@ -38,52 +38,65 @@ export class Background {
 
   getInstanceUrlAsync() {
     return new Promise(resolve => {
-      this.api.storage.managed.get(['TrottoInstanceUrl']).then((result) => {
-        resolve(result.TrottoInstanceUrl || DEFAULT_INSTANCE);
+      this.api.storage.managed.get(['OrdInstanceUrl']).then((result) => {
+        resolve(result.OrdInstanceUrl || DEFAULT_INSTANCE);
       });
     });
   };
 
-  rewriteGoRequests(details) {
-    const [scheme, rest] = details.url.split('://');
-    const [bareUrl, query] = rest.split('?');
-    const hostnameAndPort = bareUrl.split('/')[0];
+  rewriteSatRequests(details) {
+      console.log({ details })
+      const [scheme, rest] = details.url.split('://');
+      const [bareUrl, query] = rest.split('?');
+      const hostnameAndPort = bareUrl.split('/')[0];
 
-    if (hostnameAndPort.indexOf('.') !== -1
-        || hostnameAndPort.indexOf(':') !== -1
-        || BLACKLISTED_HOSTNAMES.indexOf(hostnameAndPort) !== -1
-        || (query && decodeURIComponent(query.trim()))
-        || ['http', 'https'].indexOf(scheme) === -1) {
-      return {};
-    }
-
-    var fullShorcut;
-
-    const shortcuts = [
-      {
-        shortcut: 'go/',
-        destinationPrefix: ''
+      if (hostnameAndPort.indexOf('.') !== -1
+          || hostnameAndPort.indexOf(':') !== -1
+          || BLACKLISTED_HOSTNAMES.indexOf(hostnameAndPort) !== -1
+          || (query && decodeURIComponent(query.trim()))
+          || ['http', 'https'].indexOf(scheme) === -1) {
+        return {};
       }
-    ];
 
-    for (var i in shortcuts) {
-      var shortcut = shortcuts[i];
-      if (bareUrl.slice(0, shortcut.shortcut.length) === shortcut.shortcut) {
-        fullShorcut = bareUrl.slice(shortcut.shortcut.length - 1);  // keep leading "/"
+      var fullShorcut;
 
-        if (fullShorcut !== '/') {
-          fullShorcut = shortcut.destinationPrefix + fullShorcut;
-          fullShorcut += '?s=crx';
+      const shortcuts = [
+        {
+          shortcut: 'sat/',
+          destinationPrefix: ''
         }
-        break;
+      ];
+
+      for (var i in shortcuts) {
+        var shortcut = shortcuts[i];
+        if (bareUrl.slice(0, shortcut.shortcut.length) === shortcut.shortcut) {
+          fullShorcut = bareUrl.slice(shortcut.shortcut.length - 1);  // keep leading "/"
+
+          if (fullShorcut !== '/') {
+            fullShorcut = shortcut.destinationPrefix + fullShorcut;
+          }
+          break;
+        }
       }
-    }
 
-    if (fullShorcut === undefined) {
-      fullShorcut = '/' + bareUrl + '?s=crx&sc=' + scheme;
-    }
+      if (fullShorcut === undefined) {
+        fullShorcut = '/' + bareUrl + '?s=crx&sc=' + scheme;
+      }
 
-    return {redirectUrl: getInstanceUrl() + fullShorcut};
+      const lookupUrl = getInstanceUrl() + "/sat" + fullShorcut
+      const request = new XMLHttpRequest();
+      request.open("GET", lookupUrl, false); // `false` makes the request synchronous
+      request.send(null);
+      if (request.status === 200) {
+          const inscriptionIds = request.responseText.match(/\/inscription\/(.*?)>/)
+          if (!inscriptionIds || !inscriptionIds.length) {
+              return {
+                  redirectUrl: lookupUrl
+              }
+          }
+          return { redirectUrl: `https://ordinals.com/content/${inscriptionIds[inscriptionIds.length - 1]}` }
+      }
+      return {}
   }
 
   handleInstall(details) {
@@ -103,7 +116,7 @@ export class Background {
               // then open a new tab next to the current tab
               this.api.tabs.query({active: true}).then((tabs) => {
                 var createArgs = {
-                  url: 'https://go/'
+                  url: 'https://sat/'
                 };
 
                 if (tabs.length === 1) {
@@ -119,7 +132,7 @@ export class Background {
                 });
               });
             } else {
-              this.api.tabs.update(tabs[0].id, {url: 'https://go/__init__', active: true});
+              this.api.tabs.update(tabs[0].id, {url: 'https://sat/__init__', active: true});
             }
           });
     });

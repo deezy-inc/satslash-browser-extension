@@ -1,7 +1,7 @@
 {
   "type": "object",
   "properties": {
-    "TrottoInstanceUrl": {
+    "OrdInstanceUrl": {
       "title": "Trotto instance base URL",
       "description": "Override option for the base URL of the Trotto instance used to manage and utilize Trotto go links. For example, \"https://mytrotto.example.com\".",
       "type": "string"

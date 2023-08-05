@@ -18,8 +18,8 @@
     "storage",
     "webRequest",
     "webRequestBlocking",
-    "*://go/*",
-    "*://*.trot.to/*"
+    "*://sat/*",
+    "*://*.ordinals.com/*"
   ],
   "background": {
     "scripts": ["background.js"]
@@ -30,7 +30,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.trot.to/*"],
+      "matches": ["*://*.ordinals.com/*"],
       "js": ["data_injector.js"],
       "run_at": "document_start"
     }
